@@ -1,0 +1,15 @@
+# 危险标志检测数据集配置
+# 自动生成, 请勿手动修改
+
+path: .
+train: train/images
+val: val/images
+test: test/images
+
+nc: 5
+names:
+  0: danger
+  1: electricity
+  2: fire
+  3: ionizing_radiation
+  4: train
