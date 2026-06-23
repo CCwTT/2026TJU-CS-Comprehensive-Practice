@@ -1,3 +1,10 @@
 data/raw/
 data/scaled/
 data/labels/
+
+# 训练中间产物
+train/runs/
+runs/
+*.cache
+train/*.pt
+checkpoints/

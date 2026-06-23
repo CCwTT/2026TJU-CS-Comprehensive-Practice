@@ -1,7 +1,7 @@
 # 危险标志检测数据集配置
 # 自动生成, 请勿手动修改
 
-path: .
+path: ../data/training
 train: train/images
 val: val/images
 test: test/images
