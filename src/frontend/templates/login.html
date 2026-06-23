@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>危险标志识别系统 - 登录</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px; padding: 40px; width: 380px;
+        }
+        h1 { color: #fff; text-align: center; margin-bottom: 8px; font-size: 22px; }
+        .subtitle { color: #8899aa; text-align: center; margin-bottom: 30px; font-size: 13px; }
+        .tab { display: flex; margin-bottom: 24px; border-radius: 8px; overflow: hidden; }
+        .tab button {
+            flex: 1; border: none; padding: 10px; cursor: pointer;
+            background: rgba(255,255,255,0.08); color: #8899aa; font-size: 14px;
+            transition: all 0.2s;
+        }
+        .tab button.active { background: #e94560; color: #fff; }
+        .form-group { margin-bottom: 18px; }
+        label { display: block; color: #aabbcc; margin-bottom: 6px; font-size: 13px; }
+        input {
+            width: 100%; padding: 12px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06); color: #fff;
+            font-size: 14px; outline: none;
+        }
+        input:focus { border-color: #e94560; }
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 8px;
+            background: #e94560; color: #fff; font-size: 15px; cursor: pointer;
+            margin-top: 6px; transition: background 0.2s;
+        }
+        .btn:hover { background: #d63850; }
+        .msg { text-align: center; margin-top: 12px; font-size: 13px; min-height: 20px; }
+        .msg.error { color: #ff6b6b; }
+        .msg.success { color: #51cf66; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠ 危险标志识别系统</h1>
+        <p class="subtitle">基于 YOLOv8 深度学习</p>
+        <div class="tab">
+            <button id="btnLogin" class="active" onclick="switchTab('login')">登录</button>
+            <button id="btnRegister" onclick="switchTab('register')">注册</button>
+            <button id="btnReset" onclick="switchTab('reset')">忘记密码</button>
+        </div>
+
+        <div id="formLogin">
+            <div class="form-group">
+                <label>用户名</label>
+                <input id="loginUser" placeholder="请输入用户名">
+                <label style="margin-top:12px">密码</label>
+                <input id="loginPass" type="password" placeholder="请输入密码">
+            </div>
+            <button class="btn" onclick="doLogin()">登 录</button>
+        </div>
+
+        <div id="formRegister" style="display:none">
+            <div class="form-group">
+                <label>用户名</label>
+                <input id="regUser" placeholder="不少于3个字符">
+                <label style="margin-top:12px">密码</label>
+                <input id="regPass" type="password" placeholder="不少于4个字符">
+            </div>
+            <button class="btn" onclick="doRegister()">注 册</button>
+        </div>
+
+        <div id="formReset" style="display:none">
+            <div class="form-group">
+                <label>用户名</label>
+                <input id="resetUser" placeholder="请输入要重置的用户名">
+                <label style="margin-top:12px">新密码</label>
+                <input id="resetPass" type="password" placeholder="不少于4个字符">
+            </div>
+            <button class="btn" onclick="doResetPassword()">重置密码</button>
+        </div>
+
+        <p id="msg" class="msg"></p>
+    </div>
+
+    <script>
+        let mode = 'login';
+
+        function switchTab(tab) {
+            mode = tab;
+            document.getElementById('btnLogin').classList.toggle('active', tab === 'login');
+            document.getElementById('btnRegister').classList.toggle('active', tab === 'register');
+            document.getElementById('btnReset').classList.toggle('active', tab === 'reset');
+            document.getElementById('formLogin').style.display = tab === 'login' ? 'block' : 'none';
+            document.getElementById('formRegister').style.display = tab === 'register' ? 'block' : 'none';
+            document.getElementById('formReset').style.display = tab === 'reset' ? 'block' : 'none';
+            document.getElementById('msg').textContent = '';
+        }
+
+        async function doLogin() {
+            const u = document.getElementById('loginUser').value;
+            const p = document.getElementById('loginPass').value;
+            const res = await fetch('/api/login', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                localStorage.setItem('token', data.token);
+                window.location.href = '/detect';
+            } else {
+                showMsg(data.message || '登录失败', 'error');
+            }
+        }
+
+        async function doRegister() {
+            const u = document.getElementById('regUser').value;
+            const p = document.getElementById('regPass').value;
+            const res = await fetch('/api/register', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                showMsg('注册成功, 请登录', 'success');
+                switchTab('login');
+            } else {
+                showMsg(data.message || '注册失败', 'error');
+            }
+        }
+
+        async function doResetPassword() {
+            const u = document.getElementById('resetUser').value;
+            const p = document.getElementById('resetPass').value;
+            const res = await fetch('/api/reset-password', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                showMsg('密码重置成功, 请登录', 'success');
+                switchTab('login');
+            } else {
+                showMsg(data.message || '重置失败', 'error');
+            }
+        }
+
+        function showMsg(text, cls) {
+            document.getElementById('msg').textContent = text;
+            document.getElementById('msg').className = 'msg ' + cls;
+        }
+
+        // Enter 键提交
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return;
+            if (mode === 'login') doLogin();
+            else if (mode === 'register') doRegister();
+            else if (mode === 'reset') doResetPassword();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>危险标志识别系统 - 检测</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0d1117; color: #c9d1d9;
+            min-height: 100vh;
+        }
+        header {
+            background: #161b22; border-bottom: 1px solid #21262d;
+            padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+        }
+        header h1 { font-size: 18px; color: #e94560; }
+        header .info { font-size: 13px; color: #8b949e; }
+        .tab-bar {
+            display: flex; background: #161b22; border-bottom: 1px solid #21262d;
+            padding: 0 24px;
+        }
+        .tab-bar button {
+            padding: 12px 20px; border: none; background: none;
+            color: #8b949e; cursor: pointer; font-size: 14px;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+        }
+        .tab-bar button.active { color: #e94560; border-bottom-color: #e94560; }
+        .main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* 上传区域 */
+        .upload-zone {
+            border: 2px dashed #30363d; border-radius: 12px;
+            padding: 48px 24px; text-align: center; cursor: pointer;
+            transition: border-color 0.2s; margin-bottom: 24px;
+        }
+        .upload-zone:hover { border-color: #e94560; }
+        .upload-zone p { color: #8b949e; }
+        .upload-zone .icon { font-size: 40px; margin-bottom: 12px; }
+
+        /* 结果区 */
+        .result { display: flex; gap: 24px; flex-wrap: wrap; }
+        .result img { max-width: 640px; max-height: 480px; border-radius: 8px; border: 1px solid #30363d; }
+        .result .json-box {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 16px; flex: 1; min-width: 280px; font-family: monospace; font-size: 13px;
+            white-space: pre-wrap; color: #7ee787; max-height: 480px; overflow-y: auto;
+        }
+
+        /* 摄像头 */
+        .cam-container { position: relative; display: inline-block; }
+        video, canvas { border-radius: 8px; border: 1px solid #30363d; max-width: 640px; }
+
+        /* 按钮 */
+        .btn {
+            padding: 10px 24px; border: none; border-radius: 8px;
+            background: #e94560; color: #fff; cursor: pointer; font-size: 14px;
+            transition: background 0.2s; margin-right: 12px;
+        }
+        .btn:hover { background: #d63850; }
+        .btn.secondary { background: #21262d; border: 1px solid #30363d; }
+        .btn.secondary:hover { background: #30363d; }
+
+        .det-card {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 12px 16px; margin-bottom: 8px;
+        }
+        .det-card .det-header {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+        }
+        .det-card .det-name {
+            font-size: 16px; font-weight: 600; color: #e94560;
+        }
+        .det-card .det-conf {
+            background: #1a7f37; color: #fff; padding: 2px 8px; border-radius: 12px;
+            font-size: 12px; font-weight: 600;
+        }
+        .det-card .det-detail {
+            font-size: 12px; color: #8b949e; margin-top: 4px;
+        }
+        .stats { color: #8b949e; font-size: 13px; margin-top: 12px; }
+        input[type=file] { display: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>⚠ 危险标志识别系统</h1>
+        <span class="info" id="userInfo"></span>
+    </header>
+
+    <div class="tab-bar">
+        <button class="active" onclick="switchTab('image')">📷 图片检测</button>
+        <button onclick="switchTab('video')">🎬 视频检测</button>
+        <button onclick="switchTab('camera')">📹 实时摄像头</button>
+    </div>
+
+    <div class="main">
+        <!-- 图片检测 -->
+        <div id="panelImage" class="panel active">
+            <div class="upload-zone" onclick="document.getElementById('fileImage').click()">
+                <div class="icon">🖼️</div>
+                <p>点击上传图片 (jpg/png)</p>
+                <input type="file" id="fileImage" accept="image/*" onchange="detectImage()">
+            </div>
+            <div class="result" id="resultImage"></div>
+        </div>
+
+        <!-- 视频检测 -->
+        <div id="panelVideo" class="panel">
+            <div class="upload-zone" onclick="document.getElementById('fileVideo').click()">
+                <div class="icon">🎥</div>
+                <p>点击上传视频 (mp4/avi)</p>
+                <input type="file" id="fileVideo" accept="video/*" onchange="detectVideo()">
+            </div>
+            <div id="resultVideo"></div>
+        </div>
+
+        <!-- 实时摄像头 -->
+        <div id="panelCamera" class="panel">
+            <div style="margin-bottom:16px">
+                <button class="btn" onclick="startCamera()">▶ 开启摄像头</button>
+                <button class="btn secondary" onclick="stopCamera()">⏹ 停止</button>
+                <span class="stats" id="camStats"></span>
+            </div>
+            <div class="cam-container">
+                <video id="camVideo" autoplay playsinline style="display:none"></video>
+                <canvas id="camCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/login';
+        document.getElementById('userInfo').textContent = '已登录';
+
+        let currentTab = 'image';
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-bar button').forEach((b, i) => {
+                b.classList.toggle('active', ['image','video','camera'][i] === tab);
+            });
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('panel' + tab[0].toUpperCase() + tab.slice(1)).classList.add('active');
+        }
+
+        // ========== 图片检测 ==========
+        async function detectImage() {
+            const file = document.getElementById('fileImage').files[0];
+            if (!file) return;
+            const formData = new FormData(); formData.append('file', file);
+            const res = await fetch('/api/detect/image', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            const resultDiv = document.getElementById('resultImage');
+            resultDiv.innerHTML = '';
+
+            // 标注图
+            const img = document.createElement('img');
+            img.src = 'data:image/jpeg;base64,' + hexToBase64(data.image_base64);
+            resultDiv.appendChild(img);
+
+            // 检测结果卡片
+            const infoPanel = document.createElement('div');
+            infoPanel.style.cssText = 'flex:1; min-width:280px;';
+
+            const summary = document.createElement('p');
+            summary.style.cssText = 'color:#e94560; font-size:16px; font-weight:600; margin-bottom:12px;';
+            summary.textContent = '检测到 ' + data.count + ' 个危险标志';
+            infoPanel.appendChild(summary);
+
+            if (data.detections.length === 0) {
+                const empty = document.createElement('p');
+                empty.style.cssText = 'color:#8b949e;';
+                empty.textContent = '未检测到危险标志';
+                infoPanel.appendChild(empty);
+            } else {
+                data.detections.forEach((d, i) => {
+                    const card = document.createElement('div');
+                    card.className = 'det-card';
+
+                    const header = document.createElement('div');
+                    header.className = 'det-header';
+
+                    const name = document.createElement('span');
+                    name.className = 'det-name';
+                    name.textContent = (i+1) + '. ' + d.class_name_zh + ' (' + d.class_name + ')';
+                    header.appendChild(name);
+
+                    const conf = document.createElement('span');
+                    conf.className = 'det-conf';
+                    conf.textContent = (d.confidence * 100).toFixed(1) + '%';
+                    header.appendChild(conf);
+
+                    card.appendChild(header);
+
+                    const detail = document.createElement('div');
+                    detail.className = 'det-detail';
+                    detail.textContent = '位置: [' + d.bbox.join(', ') + ']';
+                    card.appendChild(detail);
+
+                    infoPanel.appendChild(card);
+                });
+            }
+            resultDiv.appendChild(infoPanel);
+        }
+
+        // ========== 视频检测 ==========
+        let videoPlayerTimer = null;
+
+        async function detectVideo() {
+            const file = document.getElementById('fileVideo').files[0];
+            if (!file) return;
+            const rdiv = document.getElementById('resultVideo');
+            rdiv.innerHTML = '<p class="stats">正在逐帧检测, 请稍候...</p>';
+            const formData = new FormData(); formData.append('file', file);
+            const res = await fetch('/api/detect/video', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (!data.ok) {
+                rdiv.innerHTML = '<p style="color:#ff6b6b">处理失败</p>';
+                return;
+            }
+
+            // 构建播放器
+            let html = '<div style="margin-top:16px">';
+            html += '<p style="color:#e94560;font-size:18px;font-weight:600">视频检测结果</p>';
+            html += '<div class="stats" style="line-height:1.8;margin-bottom:12px">';
+            html += '原始检测: <b>' + data.total_raw + '</b> &nbsp;|&nbsp; ';
+            html += '时空确认: <b>' + data.total_confirmed + '</b> &nbsp;|&nbsp; ';
+            html += '过滤率: <b>' + data.filter_rate + '%</b>';
+            html += '</div>';
+
+            // 类别统计
+            if (data.class_summary && data.class_summary.length > 0) {
+                html += '<div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap">';
+                data.class_summary.forEach(c => {
+                    html += '<span style="background:#161b22;border:1px solid #30363d;padding:4px 12px;'
+                         + 'border-radius:6px;font-size:13px">'
+                         + c.class_name_zh + ' × <b>' + c.count + '</b></span>';
+                });
+                html += '</div>';
+            }
+
+            // Canvas 播放器
+            html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">'
+                 + '<button id="btnPlay" class="btn" onclick="playVideoFrames()">▶ 播放</button>'
+                 + '<button class="btn secondary" onclick="pauseVideoFrames()">⏸ 暂停</button>'
+                 + '<input id="frameSlider" type="range" min="0" max="' + (data.frames.length - 1) + '" value="0"'
+                 + ' oninput="seekFrame(this.value)" style="flex:1;accent-color:#e94560">'
+                 + '<span id="frameLabel" class="stats" style="min-width:60px;text-align:right">0/' + data.frames.length + '</span>'
+                 + '</div>'
+                 + '<canvas id="videoCanvas" width="640" height="480" style="border-radius:8px;border:1px solid #30363d;max-width:100%"></canvas>';
+
+            html += '</div>';
+            rdiv.innerHTML = html;
+
+            // 存储帧数据到全局
+            window._videoFrames = data.frames;
+            window._videoFps = data.fps || 30;
+            window._currentFrame = 0;
+            showFrame(0);
+        }
+
+        function showFrame(idx) {
+            if (!window._videoFrames || idx >= window._videoFrames.length) return;
+            window._currentFrame = idx;
+            const canvas = document.getElementById('videoCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = 'data:image/jpeg;base64,' + hexToBase64(window._videoFrames[idx]);
+            document.getElementById('frameSlider').value = idx;
+            document.getElementById('frameLabel').textContent = (idx+1) + '/' + window._videoFrames.length;
+        }
+
+        function playVideoFrames() {
+            pauseVideoFrames();
+            const interval = 1000 / (window._videoFps || 30);
+            videoPlayerTimer = setInterval(() => {
+                let next = (window._currentFrame + 1) % window._videoFrames.length;
+                showFrame(next);
+            }, interval);
+        }
+
+        function pauseVideoFrames() {
+            if (videoPlayerTimer) clearInterval(videoPlayerTimer);
+        }
+
+        function seekFrame(idx) {
+            pauseVideoFrames();
+            showFrame(parseInt(idx));
+        }
+
+        // ========== 实时摄像头 ==========
+        let camStream = null, ws = null, camInterval = null;
+
+        async function startCamera() {
+            camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            const video = document.getElementById('camVideo');
+            video.srcObject = camStream;
+            video.style.display = 'block';
+
+            // WebSocket
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(proto + '//' + location.host + '/api/detect/live');
+            ws.onopen = async () => {
+                ws.send(token);
+                // 等待 ready
+            };
+            ws.onmessage = (e) => {
+                if (e.data === 'ready') {
+                    document.getElementById('camStats').textContent = '已连接, 开始检测...';
+                    startFrameLoop();
+                    return;
+                }
+                const blob = e.data instanceof Blob ? e.data : new Blob([e.data]);
+                const url = URL.createObjectURL(blob);
+                const canvas = document.getElementById('camCanvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width; canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            };
+            ws.onclose = () => document.getElementById('camStats').textContent = '连接断开';
+        }
+
+        function startFrameLoop() {
+            const video = document.getElementById('camVideo');
+            const canvas = document.createElement('canvas');
+            canvas.width = 640; canvas.height = 480;
+            const ctx = canvas.getContext('2d');
+            camInterval = setInterval(() => {
+                ctx.drawImage(video, 0, 0, 640, 480);
+                canvas.toBlob(blob => {
+                    if (ws && ws.readyState === WebSocket.OPEN) ws.send(blob);
+                }, 'image/jpeg', 0.7);
+            }, 66); // 15fps
+        }
+
+        function stopCamera() {
+            if (camInterval) clearInterval(camInterval);
+            if (ws) ws.close();
+            if (camStream) camStream.getTracks().forEach(t => t.stop());
+            document.getElementById('camVideo').style.display = 'none';
+            document.getElementById('camStats').textContent = '摄像头已停止';
+        }
+
+        // ========== 工具 ==========
+        function hexToBase64(hex) {
+            let b = ''; for (let i=0; i<hex.length; i+=2) b += String.fromCharCode(parseInt(hex.substr(i,2), 16));
+            return btoa(b);
+        }
+    </script>
+</body>
+</html>
